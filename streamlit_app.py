@@ -8,8 +8,13 @@ import pandas as pd
 import os
 import tempfile
 import matplotlib.pyplot as plt
+from dotenv import load_dotenv
 from src.abc_classes import classify_abc
 from src.slotting import perform_slotting
+from src.llm_model_analysis import analyze_slotting as analyze_slotting_llm
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Set up the page
 st.set_page_config(
@@ -81,13 +86,14 @@ if uploaded_file is not None:
     
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        zona_a_ruas = st.number_input("Zone A Rows", min_value=1, max_value=num_ruas, value=3, step=1)
-        zona_a_niveis = st.number_input("Zone A Levels", min_value=1, max_value=num_niveis, value=2, step=1)
-        zona_a_blocos = st.number_input("Zone A Blocks", min_value=1, max_value=num_blocos, value=3, step=1)
+        zona_a_ruas = st.number_input("Zone A Rows", min_value=1, max_value=num_ruas, value=min(3, num_ruas), step=1)
+        zona_a_niveis = st.number_input("Zone A Levels", min_value=1, max_value=num_niveis, value=min(2, num_niveis), step=1)
+        zona_a_blocos = st.number_input("Zone A Blocks", min_value=1, max_value=num_blocos, value=min(3, num_blocos), step=1)
     with col2:
         zona_b_percentage = st.number_input("Zone B Percentage", min_value=0.1, max_value=0.9, value=0.3, step=0.05, format="%.2f")
     
     # Run Slotting button
+    st.sidebar.write("Click the button below to run the slotting process")
     if st.sidebar.button("Run Slotting", type="primary", use_container_width=True):
         with st.spinner("Processing..."):
             # Create temporary files for intermediate results
@@ -129,8 +135,21 @@ if uploaded_file is not None:
                     zona_b_percentage=zona_b_percentage
                 )
                 
-                # Display results in tabs
-                tab1, tab2, tab3 = st.tabs(["ABC Classification", "Slotting Results", "Warehouse Statistics"])
+                # Create a section at the top to display LLM analysis results
+                st.subheader("AI-Powered Slotting Analysis")
+                
+                # Check if we have analysis results from a previous run
+                if 'llm_analysis' in st.session_state and st.session_state['llm_analysis']:
+                    st.markdown(st.session_state['llm_analysis'])
+                else:
+                    st.info("The AI analysis will appear here after processing in the AI Analysis tab.")
+                st.divider()
+                
+                # Create tabs for results
+                tab1, tab2, tab3, tab4 = st.tabs(["ABC Classification", "Slotting Results", "Warehouse Statistics", "AI Analysis"])
+                
+                # Store analysis results for later display
+                analysis_result = None
                 
                 with tab1:
                     st.header("ABC Classification Results")
@@ -219,6 +238,87 @@ if uploaded_file is not None:
                         st.info(f"Zone A Utilization: {zone_a_used}/{zone_a_locations} ({zone_a_used/zone_a_locations:.1%})")
                         st.info(f"Zone B Utilization: {zone_b_used}/{zone_b_locations} ({zone_b_used/zone_b_locations:.1%})")
                         st.info(f"Zone C Utilization: {zone_c_used}/{zone_c_locations} ({zone_c_used/zone_c_locations:.1%})")
+                
+                with tab4:
+                    st.header("AI Analysis")
+                    
+                    # Check if OpenAI API key is available
+                    api_key = os.environ.get("OPENAI_API_KEY")
+                    
+                    if api_key:
+                        with st.spinner("Generating AI analysis of slotting results..."):
+                            try:
+                                # Save temporary files for analysis
+                                with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as temp_abc_file:
+                                    temp_abc_path = temp_abc_file.name
+                                    abc_df.to_csv(temp_abc_path, index=False)
+                                    
+                                with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as temp_slotting_file:
+                                    temp_slotting_path = temp_slotting_file.name
+                                    slotting_df.to_csv(temp_slotting_path, index=False)
+                                
+                                # Run LLM analysis
+                                analysis_text = analyze_slotting_llm(
+                                    slotting_file=temp_slotting_path,
+                                    abc_file=temp_abc_path
+                                )
+                                
+                                # Display analysis
+                                st.subheader("AI-Generated Slotting Analysis")
+                                st.markdown(analysis_text)
+                                
+                                # Update the main page with the analysis
+                                st.session_state['llm_analysis'] = analysis_text
+                                
+                                # Display the analysis without rerunning
+                                # We'll keep the analysis in this tab and not rerun
+                                # which was causing the output to disappear
+                                
+                                # Clean up temporary files
+                                os.unlink(temp_abc_path)
+                                os.unlink(temp_slotting_path)
+                                
+                            except Exception as e:
+                                st.error(f"Error generating AI analysis: {str(e)}")
+                    else:
+                        st.warning("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable to enable AI analysis.")
+                        st.info("You can set your API key by creating a .env file with OPENAI_API_KEY=your_api_key_here")
+                        
+                        # Option to input API key directly
+                        with st.expander("Enter OpenAI API Key"):
+                            api_key_input = st.text_input("API Key", type="password")
+                            if st.button("Generate Analysis") and api_key_input:
+                                with st.spinner("Generating AI analysis of slotting results..."):
+                                    try:
+                                        # Save temporary files for analysis
+                                        with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as temp_abc_file:
+                                            temp_abc_path = temp_abc_file.name
+                                            abc_df.to_csv(temp_abc_path, index=False)
+                                            
+                                        with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as temp_slotting_file:
+                                            temp_slotting_path = temp_slotting_file.name
+                                            slotting_df.to_csv(temp_slotting_path, index=False)
+                                        
+                                        # Run LLM analysis
+                                        analysis_text = analyze_slotting_llm(
+                                            slotting_file=temp_slotting_path,
+                                            abc_file=temp_abc_path,
+                                            api_key=api_key_input
+                                        )
+                                        
+                                        # Display analysis
+                                        st.subheader("AI-Generated Slotting Analysis")
+                                        st.markdown(analysis_text)
+                                        
+                                        # Store analysis in session state for display on main page
+                                        st.session_state['llm_analysis'] = analysis_text
+                                        
+                                        # Clean up temporary files
+                                        os.unlink(temp_abc_path)
+                                        os.unlink(temp_slotting_path)
+                                        
+                                    except Exception as e:
+                                        st.error(f"Error generating AI analysis: {str(e)}")
                 
                 # Download buttons for results
                 col1, col2 = st.columns(2)

@@ -28,6 +28,15 @@ cd r2bit_Slotting
 pip install -r requirements.txt
 ```
 
+3. Set up environment variables:
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit the .env file and add your OpenAI API key
+# Replace 'your_openai_api_key_here' with your actual API key
+```
+
 ## Usage
 
 Run the Streamlit application:
@@ -37,12 +46,27 @@ streamlit run streamlit_app.py
 
 This will start the web interface, which you can access in your browser.
 
+### LLM Analysis
+
+To analyze slotting results using OpenAI's GPT-4o:
+
+```bash
+python src/llm_model_analysis.py path/to/slotting_results.csv --abc-file path/to/abc_results.csv
+```
+
+Or you can provide the API key directly:
+
+```bash
+python src/llm_model_analysis.py path/to/slotting_results.csv --api-key your_openai_api_key
+```
+
 ## Features
 
-- Add new slots with custom properties
-- View all existing slots
-- Update slot information
-- Delete slots when no longer needed
+- ABC classification of SKUs based on order frequency and unit volume
+- Warehouse slotting with configurable zones (A, B, C)
+- Interactive Streamlit interface for parameter configuration
+- Visualization of results with charts and tables
+- AI-powered analysis of slotting results using OpenAI GPT-4o
 
 ## Development
 

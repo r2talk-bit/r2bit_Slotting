@@ -96,6 +96,9 @@ class ABCClassifier:
         Returns:
             pandas.DataFrame: DataFrame with original data and added ABC classification column
         """
+        # Store original columns to preserve them in the result
+        original_columns = df.columns.tolist()
+        
         # Calculate scores
         result_df = self.calculate_score(df, sku_column, order_column, unit_column)
         
@@ -123,6 +126,11 @@ class ABCClassifier:
         
         # Clean up intermediate columns if needed
         result_df = result_df.drop(['cum_score', 'cum_percentage'], axis=1)
+        
+        # Ensure all original columns are preserved
+        for col in original_columns:
+            if col not in result_df.columns and col in df.columns:
+                result_df[col] = df[col]
         
         return result_df
     
